@@ -21,6 +21,7 @@ static uint64_t syntheticPtsBase;
 static uint16_t frameHostProcessingLatency;
 static uint64_t firstPacketReceiveTime;
 static unsigned int firstPacketPresentationTime;
+static uint32_t firstPacketRtpTimestamp;
 static bool dropStatePending;
 static bool idrFrameProcessed;
 
@@ -72,6 +73,7 @@ void initializeVideoDepacketizer(int pktSize) {
     frameHostProcessingLatency = 0;
     firstPacketReceiveTime = 0;
     firstPacketPresentationTime = 0;
+    firstPacketRtpTimestamp = 0;
     lastPacketPayloadLength = 0;
     dropStatePending = false;
     idrFrameProcessed = false;
@@ -485,6 +487,7 @@ static void reassembleFrame(int frameNumber) {
             qdu->decodeUnit.frameHostProcessingLatency = frameHostProcessingLatency;
             qdu->decodeUnit.receiveTimeMs = firstPacketReceiveTime;
             qdu->decodeUnit.presentationTimeMs = firstPacketPresentationTime;
+            qdu->decodeUnit.rtpTimestamp = firstPacketRtpTimestamp;
             qdu->decodeUnit.enqueueTimeMs = LiGetMillis();
 
             // These might be wrong for a few frames during a transition between SDR and HDR,
@@ -741,6 +744,7 @@ static bool isFirstPacket(uint8_t flags, uint8_t fecBlockNumber) {
 // The caller will free *existingEntry unless we NULL it
 static void processRtpPayload(PNV_VIDEO_PACKET videoPacket, int length,
                        uint64_t receiveTimeMs, unsigned int presentationTimeMs,
+                       uint32_t rtpTimestamp,
                        PLENTRY_INTERNAL* existingEntry) {
     BUFFER_DESC currentPos;
     uint32_t frameIndex;
@@ -833,9 +837,13 @@ static void processRtpPayload(PNV_VIDEO_PACKET videoPacket, int length,
         
         if (!presentationTimeMs && frameIndex > 0) {
             firstPacketPresentationTime = (unsigned int)(receiveTimeMs - syntheticPtsBase);
+            // Synthetic PTS: no valid host clock — leave 0 so pacing consumers
+            // fall back to their ms-based reconstruction.
+            firstPacketRtpTimestamp = 0;
         }
         else {
             firstPacketPresentationTime = presentationTimeMs;
+            firstPacketRtpTimestamp = rtpTimestamp;
         }
     }
 
@@ -1175,6 +1183,7 @@ void queueRtpPacket(PRTPV_QUEUE_ENTRY queueEntryPtr) {
                       queueEntry.length - dataOffset,
                       queueEntry.receiveTimeMs,
                       queueEntry.presentationTimeMs,
+                      queueEntry.rtpTimestamp,
                       &existingEntry);
 
     if (existingEntry != NULL) {

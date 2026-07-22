@@ -8,6 +8,9 @@ typedef struct _RTPV_QUEUE_ENTRY {
     PRTP_PACKET packet;
     uint64_t receiveTimeMs;
     uint32_t presentationTimeMs;
+    // Raw 90 kHz RTP timestamp (full precision source of presentationTimeMs).
+    // Added for VRR frame pacing (vibemis BL-2336).
+    uint32_t rtpTimestamp;
     int length;
     bool isParity;
 } RTPV_QUEUE_ENTRY, *PRTPV_QUEUE_ENTRY;

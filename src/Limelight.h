@@ -170,6 +170,13 @@ typedef struct _DECODE_UNIT {
     // long prior to display.
     unsigned int presentationTimeMs;
 
+    // Raw 90 kHz RTP presentation timestamp of this frame's first packet — the
+    // full-precision source of presentationTimeMs (which truncates to ms). 0 when
+    // the host sent no valid PTS (the synthetic-PTS fallback path). Consumers that
+    // pace frames (VRR cadence learning) should prefer this field and fall back to
+    // presentationTimeMs * 90 when it is 0. Added for vibemis BL-2336.
+    uint32_t rtpTimestamp;
+
     // Length of the entire buffer chain in bytes
     int fullLength;
 
