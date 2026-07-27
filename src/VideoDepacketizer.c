@@ -22,6 +22,7 @@ static uint16_t frameHostProcessingLatency;
 static uint64_t firstPacketReceiveTime;
 static unsigned int firstPacketPresentationTime;
 static uint32_t firstPacketRtpTimestamp;
+static bool firstPacketRtpTimestampValid;
 static bool dropStatePending;
 static bool idrFrameProcessed;
 
@@ -74,6 +75,7 @@ void initializeVideoDepacketizer(int pktSize) {
     firstPacketReceiveTime = 0;
     firstPacketPresentationTime = 0;
     firstPacketRtpTimestamp = 0;
+    firstPacketRtpTimestampValid = false;
     lastPacketPayloadLength = 0;
     dropStatePending = false;
     idrFrameProcessed = false;
@@ -488,6 +490,7 @@ static void reassembleFrame(int frameNumber) {
             qdu->decodeUnit.receiveTimeMs = firstPacketReceiveTime;
             qdu->decodeUnit.presentationTimeMs = firstPacketPresentationTime;
             qdu->decodeUnit.rtpTimestamp = firstPacketRtpTimestamp;
+            qdu->decodeUnit.rtpTimestampValid = firstPacketRtpTimestampValid;
             qdu->decodeUnit.enqueueTimeMs = LiGetMillis();
 
             // These might be wrong for a few frames during a transition between SDR and HDR,
@@ -837,13 +840,18 @@ static void processRtpPayload(PNV_VIDEO_PACKET videoPacket, int length,
         
         if (!presentationTimeMs && frameIndex > 0) {
             firstPacketPresentationTime = (unsigned int)(receiveTimeMs - syntheticPtsBase);
-            // Synthetic PTS: no valid host clock — leave 0 so pacing consumers
-            // fall back to their ms-based reconstruction.
-            firstPacketRtpTimestamp = 0;
+            // Synthetic PTS: the host sent no usable clock. Carry the raw RTP
+            // timestamp through unchanged but mark it invalid, so consumers take
+            // their documented no-timestamp path instead of pacing off a value
+            // that means nothing. Zeroing it here would be indistinguishable
+            // from a host that legitimately sent timestamp 0 (vibemis BL-2415).
+            firstPacketRtpTimestamp = rtpTimestamp;
+            firstPacketRtpTimestampValid = false;
         }
         else {
             firstPacketPresentationTime = presentationTimeMs;
             firstPacketRtpTimestamp = rtpTimestamp;
+            firstPacketRtpTimestampValid = true;
         }
     }
 

@@ -171,11 +171,21 @@ typedef struct _DECODE_UNIT {
     unsigned int presentationTimeMs;
 
     // Raw 90 kHz RTP presentation timestamp of this frame's first packet — the
-    // full-precision source of presentationTimeMs (which truncates to ms). 0 when
-    // the host sent no valid PTS (the synthetic-PTS fallback path). Consumers that
-    // pace frames (VRR cadence learning) should prefer this field and fall back to
-    // presentationTimeMs * 90 when it is 0. Added for vibemis BL-2336.
+    // full-precision source of presentationTimeMs (which truncates to ms).
+    // Consumers that pace frames (VRR cadence learning) should prefer this field
+    // over presentationTimeMs, but only when rtpTimestampValid is true.
+    // Added for vibemis BL-2336.
     uint32_t rtpTimestamp;
+
+    // True when rtpTimestamp came from a host-supplied PTS and can be used as a
+    // 90 kHz clock. False when the host sent no valid PTS and presentationTimeMs
+    // was synthesized from the receive time; rtpTimestamp is still carried
+    // verbatim in that case but carries no timing meaning.
+    //
+    // An RTP timestamp of 0 is a legitimate value, so validity is represented
+    // separately rather than inferred from the raw value. Consumers must not
+    // test rtpTimestamp != 0. Added for vibemis BL-2415.
+    bool rtpTimestampValid;
 
     // Length of the entire buffer chain in bytes
     int fullLength;
