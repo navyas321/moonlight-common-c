@@ -61,7 +61,16 @@ typedef struct _LENTRY_INTERNAL {
 
 // Init
 void initializeVideoDepacketizer(int pktSize) {
-    LbqInitializeLinkedBlockingQueue(&decodeUnitQueue, 15);
+    // The queue bound decides how long a delivery burst we absorb before
+    // flushing everything and requesting an IDR frame. A fixed 15 frames is
+    // ~250 ms at 60 FPS but only ~130 ms at 116 FPS, which a Wi-Fi off-channel
+    // scan dwell (~150 ms, AP-buffered then delivered at once) exceeds even
+    // though nothing was lost (BL-2713). Size it to ~300 ms of frames instead.
+    int duQueueBound = (StreamConfig.fps * 3 + 9) / 10;
+    if (duQueueBound < 15) {
+        duQueueBound = 15;
+    }
+    LbqInitializeLinkedBlockingQueue(&decodeUnitQueue, duQueueBound);
 
     nextFrameNumber = 1;
     startFrameNumber = 0;
